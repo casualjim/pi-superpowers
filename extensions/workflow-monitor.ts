@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 import { createWorkflowHandler, type WorkflowMonitorState } from "./workflow-monitor/workflow-handler.ts";
 import { getCurrentGitRef } from "./workflow-monitor/git.ts";
 import { warningForViolation } from "./workflow-monitor/warnings.ts";
@@ -18,13 +19,17 @@ class WidgetText {
     this.paddingY = paddingY;
   }
 
-  render(width = this.text.length): string[] {
+  render(width = visibleWidth(this.text) + this.paddingX * 2): string[] {
+    const renderWidth = Math.max(0, width);
     const horizontal = " ".repeat(this.paddingX);
-    const blank = " ".repeat(Math.max(0, width));
-    const lines = [`${horizontal}${this.text}${horizontal}`];
+    const contentWidth = Math.max(0, renderWidth - this.paddingX * 2);
+    const displayText = visibleWidth(this.text) > contentWidth ? truncateToWidth(this.text, contentWidth) : this.text;
+    const paddedLine = `${horizontal}${displayText}${horizontal}`;
+    const line = visibleWidth(paddedLine) > renderWidth ? truncateToWidth(paddedLine, renderWidth, "") : paddedLine;
+    const blank = " ".repeat(renderWidth);
     return [
       ...Array.from({ length: this.paddingY }, () => blank),
-      ...lines,
+      line,
       ...Array.from({ length: this.paddingY }, () => blank),
     ];
   }

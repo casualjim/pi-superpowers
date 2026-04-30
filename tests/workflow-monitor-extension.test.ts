@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { test } from "node:test";
+import { visibleWidth } from "@mariozechner/pi-tui";
 import workflowMonitorExtension from "../extensions/workflow-monitor.ts";
 
 function renderWidget(widget: unknown): string {
@@ -16,6 +17,21 @@ function renderWidget(widget: unknown): string {
   };
   const rendered = (widget as Function)(null, theme);
   return String(rendered?.text ?? rendered ?? "");
+}
+
+function renderWidgetLines(widget: unknown, width: number): string[] {
+  assert.equal(typeof widget, "function");
+  const theme = {
+    fg(_color: string, text: string) {
+      return `\x1b[38;2;102;102;102m${text}\x1b[39m`;
+    },
+    bold(text: string) {
+      return `\x1b[1m${text}\x1b[22m`;
+    },
+  };
+  const rendered = (widget as Function)(null, theme);
+  assert.equal(typeof rendered?.render, "function");
+  return rendered.render(width);
 }
 
 function createHarness(existingEntries: any[] = []) {
@@ -122,6 +138,19 @@ test("extension observes todo and pi-subagents tools", async () => {
   assert.equal(harness.appended.at(-1).data.workflow.currentPhase, "review");
 });
 
+
+test("extension widget render lines fit the terminal width", async () => {
+  const harness = createHarness();
+  await harness.emit("input", { text: "/skill:writing-plans" });
+  await harness.emit("tool_call", { toolName: "todo", input: { action: "create", subject: "Implement Task 1" } });
+  await harness.emit("tool_result", { toolName: "write", input: { path: "tests/widget.test.ts" }, isError: false });
+  await harness.emit("tool_result", { toolName: "write", input: { path: "src/widget.ts" }, isError: false });
+  await harness.emit("tool_result", { toolName: "bash", input: { command: "npm test" }, content: "PASS", details: { exitCode: 0 } });
+
+  const lines = renderWidgetLines(harness.widgets["pi-superpowers-workflow"], 58);
+  assert.ok(lines.length > 0);
+  assert.ok(lines.every((line) => visibleWidth(line) <= 58));
+});
 
 test("extension widget uses the pi-superpowers-plus guardrail highlighting contract", async () => {
   const harness = createHarness();
